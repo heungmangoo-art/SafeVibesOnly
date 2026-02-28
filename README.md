@@ -2,6 +2,10 @@
 
 ![SafeVibesOnly Score](https://safe-vibes-only.vercel.app/api/badge/heungmangoo-art/SafeVibesOnly?score=85&grade=A)
 
+이 저장소는 **참고용으로만** 공개되어 있습니다. 소스 열람만 가능하며, 사용·복제·수정·재배포는 저작권자 허락 없이 금지됩니다. ([LICENSE](LICENSE))
+
+---
+
 GitHub AI 생성 코드(Vibe code)의 보안 및 품질을 검사하고 점수/배지를 발급하는 웹 서비스입니다.
 
 ## 기능
