@@ -4,7 +4,7 @@ SafeVibesOnly에 기여해 주셔서 감사합니다.
 
 ## 버그/이슈 보고
 
-- [GitHub Issues](https://github.com/heungmangoo-art/safevibesonly/issues)에서 새 이슈를 열어 주세요.
+- [GitHub Issues](https://github.com/heungmangoo-art/SafeVibesOnly/issues)에서 새 이슈를 열어 주세요.
 - 재현 방법, 환경(OS, Node 버전), 예상 동작과 실제 동작을 적어 주시면 도움이 됩니다.
 
 ## 코드/기능 제안

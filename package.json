@@ -4,7 +4,7 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/heungmangoo-art/safevibesonly.git"
+    "url": "https://github.com/heungmangoo-art/SafeVibesOnly.git"
   },
   "scripts": {
     "dev": "next dev",
