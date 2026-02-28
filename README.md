@@ -9,6 +9,15 @@ GitHub AI 생성 코드(Vibe code)의 보안 및 품질을 검사하고 점수/�
 - **배지**: README용 마크다운 배지 생성 및 복사
 - **Badge API**: SVG 배지 이미지 제공 (`/api/badge/[username]/[repo]`)
 
+## CI / 테스트·린트 워크플로우
+
+`.github/workflows/ci.yml`이 있어서, **main에 push하거나 PR을 올릴 때마다** GitHub가 자동으로 다음을 실행합니다.
+
+- **Lint**: `npm run lint` — 코드 스타일·잠재적 버그 검사 (Next.js 기준)
+- **Build**: `npm run build` — 프로젝트가 정상적으로 빌드되는지 확인
+
+실패하면 GitHub Actions 탭에 빨간불이 뜨고, 그때 수정하면 됩니다. “내가 안 돌려봤는데 배포만 되면 어?” 같은 상황을 막는 자동 점검입니다.
+
 ## 기술 스택
 
 - **Framework**: Next.js 16 (App Router)
