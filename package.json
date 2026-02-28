@@ -2,6 +2,7 @@
   "name": "safevibesonly",
   "version": "0.1.0",
   "private": true,
+  "description": "GitHub AI 생성 코드(Vibe code)의 보안·품질을 검사하고 점수/배지를 발급하는 웹 서비스",
   "repository": {
     "type": "git",
     "url": "https://github.com/heungmangoo-art/SafeVibesOnly.git"
