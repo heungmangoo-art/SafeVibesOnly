@@ -37,47 +37,61 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center py-4 px-4 bg-background bg-subtle">
-      <main className="flex-1 mx-auto w-full max-w-2xl px-6 py-6 sm:py-8 text-foreground flex flex-col justify-center">
-              <header className="mb-5 text-center space-y-2">
-                <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl leading-snug whitespace-pre-line">
+    <div className="h-full flex flex-col items-center justify-center py-2 px-4 bg-background bg-subtle relative min-h-0 overflow-auto">
+      <Link
+        href="/"
+        className="absolute left-4 top-2 flex items-center gap-2"
+        aria-label="Safe Vibes Only"
+      >
+        <span className="flex flex-col gap-1 rounded-lg bg-foreground/10 p-1 shrink-0">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#f87171]" aria-hidden />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#fbbf24]" aria-hidden />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#34d399]" aria-hidden />
+        </span>
+        <span className="text-xs font-semibold tracking-tight text-foreground hover:text-point transition">
+          Safe Vibes Only.
+        </span>
+      </Link>
+      <main className="flex-1 flex flex-col justify-center w-full max-w-2xl px-4 py-2 text-foreground min-h-0">
+              <header className="mb-3 text-left space-y-1">
+                <h1 className="text-base font-semibold tracking-tight text-foreground leading-snug">
                   {t.home.heroTitle}
                 </h1>
-                <p className="text-sm text-foreground/75 sm:text-base leading-relaxed max-w-xl mx-auto">
+                <p className="text-xs text-foreground/75 leading-relaxed max-w-xl">
                   {t.home.heroSubtitle}
                 </p>
-                <p className="text-xs text-foreground/50 leading-relaxed max-w-xl mx-auto whitespace-pre-line">
+                <p className="text-[11px] text-foreground/50 leading-relaxed max-w-xl whitespace-pre-line">
                   {t.home.scopeNote}
                 </p>
               </header>
 
-              <form onSubmit={handleSubmit} className="mb-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <form onSubmit={handleSubmit} className="mb-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <input
                     type="text"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder={t.home.placeholder}
-                    className="flex-1 rounded-3xl border border-foreground/12 bg-foreground/[0.04] px-5 py-3.5 text-foreground placeholder:text-foreground/40 focus:border-point/60 focus:outline-none focus:ring-2 focus:ring-point/15 transition-all shadow-sm"
+                    className="flex-1 min-w-0 rounded-lg border border-foreground/15 bg-foreground/[0.04] px-3 py-2.5 text-sm text-foreground placeholder:text-foreground/45 focus:border-point/50 focus:outline-none focus:ring-1 focus:ring-point/20 transition-colors"
                     aria-invalid={!!error}
                     aria-describedby={error ? "url-error" : undefined}
                   />
                   <button
                     type="submit"
-                    className="rounded-3xl bg-point px-6 py-3.5 font-semibold text-[#0d1117] transition hover:opacity-90 hover:shadow-lg hover:shadow-point/25 active:scale-[0.98] shadow-md shadow-point/15"
+                    className="shrink-0 rounded-lg bg-point px-5 py-2.5 text-sm font-medium text-[#0d1117] transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-point/30 focus:ring-offset-2 focus:ring-offset-background"
                   >
                     {t.home.scanNow}
                   </button>
                 </div>
                 {error && (
-                  <p id="url-error" className="mt-2 text-sm text-red-400/90" role="alert">
+                  <p id="url-error" className="mt-1.5 text-xs text-red-400/90" role="alert">
                     {error}
                   </p>
                 )}
               </form>
 
-              <section className="rounded-3xl border border-foreground/10 bg-foreground/[0.03] p-4 shadow-sm">
-                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-foreground/55">
+              <section className="rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3">
+                <h2 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-foreground/60">
                   {t.home.demo}
                 </h2>
                 {(() => {
@@ -94,53 +108,53 @@ export default function Home() {
                   ];
                   return (
                     <>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-2xl font-bold sm:text-3xl" style={{ color: totalColor }}>
+                      <div className="flex flex-wrap items-center gap-3 border-b border-foreground/10 pb-2">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xl font-semibold tabular-nums" style={{ color: totalColor }}>
                             {totalScore}
                           </span>
-                          <span className="text-foreground/60 text-sm">/ 100</span>
+                          <span className="text-foreground/50 text-xs">/ 100</span>
                         </div>
                         <span
-                          className="rounded-2xl px-3 py-1 font-mono text-xs font-semibold"
-                          style={{ backgroundColor: `${totalColor}20`, color: totalColor }}
+                          className="rounded px-1.5 py-0.5 font-mono text-[11px] font-medium"
+                          style={{ backgroundColor: `${totalColor}18`, color: totalColor }}
                         >
                           {grade}
                         </span>
                         <img
                           src={`/api/badge/demo/example?score=${totalScore}&grade=${grade}`}
                           alt={`SafeVibesOnly Score: ${totalScore} (${grade})`}
-                          className="h-6"
+                          className="h-5 ml-auto"
                         />
                       </div>
-                      <div className="mt-4 space-y-2">
+                      <dl className="mt-2 space-y-1.5">
                         {items.map(({ label, value }) => {
                           const barColor = scoreToColor(value);
                           return (
                             <div key={label}>
-                              <div className="mb-1 flex justify-between text-xs text-foreground/65">
-                                <span>{label}</span>
-                                <span style={{ color: barColor }}>{value}</span>
+                              <div className="mb-0.5 flex justify-between text-[11px]">
+                                <dt className="text-foreground/70">{label}</dt>
+                                <dd className="tabular-nums font-medium" style={{ color: barColor }}>{value}</dd>
                               </div>
-                              <div className="h-1.5 w-full rounded-full bg-foreground/10 overflow-hidden">
+                              <div className="h-1 w-full rounded-full bg-foreground/10 overflow-hidden">
                                 <div
-                                  className="h-1.5 rounded-full transition-all duration-500"
+                                  className="h-1 rounded-full transition-[width] duration-300"
                                   style={{ width: `${value}%`, backgroundColor: barColor }}
                                 />
                               </div>
                             </div>
                           );
                         })}
-                      </div>
+                      </dl>
                     </>
                   );
                 })()}
               </section>
 
-              <p className="mt-4 text-center text-xs text-foreground/55">
+              <p className="mt-3 text-left text-[11px] text-foreground/55">
                 <Link
                   href="/result?repo=https://github.com/vercel/next.js"
-                  className="text-accent hover:underline hover:text-accent/90 transition rounded-full px-4 py-2 hover:bg-accent/10"
+                  className="text-accent hover:underline hover:text-accent/90 transition"
                 >
                   {t.home.trySample}
                 </Link>

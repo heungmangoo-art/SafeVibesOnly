@@ -68,12 +68,19 @@ function getGradeColor(grade: string): string {
   return "#f87171";
 }
 
+function scoreToColor(score: number): string {
+  if (score >= 80) return "#34d399";
+  if (score >= 70) return "#fbbf24";
+  if (score >= 60) return "#f87171";
+  return "#f87171";
+}
+
 function ResultLoadingFallback() {
   const { t } = useLocale();
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-background bg-subtle text-foreground">
-      <div className="h-10 w-10 animate-spin rounded-full border-2 border-foreground/20 border-t-point" />
-      <p className="mt-4 text-foreground/80">{t.result.loading}</p>
+    <div className="h-full flex flex-col items-center justify-center px-4 bg-background bg-subtle text-foreground">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-point" />
+      <p className="mt-3 text-sm text-foreground/80">{t.result.loading}</p>
     </div>
   );
 }
@@ -137,31 +144,27 @@ function ResultContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-background bg-subtle text-foreground">
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-foreground/20 border-t-point" />
-        <p className="mt-4 text-foreground/80">{t.result.scanning}</p>
+      <div className="h-full flex flex-col items-center justify-center px-4 bg-background bg-subtle text-foreground">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-point" />
+        <p className="mt-3 text-sm text-foreground/80">{t.result.scanning}</p>
       </div>
-    </div>
     );
   }
 
   if (!result) {
     if (errorMessage) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-background bg-subtle text-foreground">
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="max-w-md text-center">
-              <p className="text-foreground font-mono text-lg mb-2">{t.result.scanErrorTitle}</p>
-              <p className="text-foreground/80 text-sm mb-6 whitespace-pre-wrap">{errorMessage}</p>
+        <div className="h-full flex flex-col items-center justify-center px-4 bg-background bg-subtle text-foreground">
+          <div className="max-w-md text-center">
+            <p className="text-foreground font-mono text-sm mb-1.5">{t.result.scanErrorTitle}</p>
+            <p className="text-foreground/80 text-xs mb-4 whitespace-pre-wrap">{errorMessage}</p>
               <Link
                 href="/"
-                className="text-accent hover:underline text-sm"
+                className="text-accent hover:underline text-xs"
               >
                 {t.result.back}
               </Link>
             </div>
-          </div>
         </div>
       );
     }
@@ -176,13 +179,13 @@ function ResultContent() {
   const gradeColor = getGradeColor(result.grade);
 
   return (
-    <div className="min-h-screen bg-background bg-subtle text-foreground">
-      <main className="mx-auto max-w-6xl w-full px-4 sm:px-6 py-8 md:py-12 overflow-auto">
-        <div className="min-w-0 max-w-4xl">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <div className="h-full min-h-0 bg-background bg-subtle text-foreground overflow-auto">
+      <main className="mx-auto max-w-4xl w-full px-4 py-4">
+        <div className="min-w-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <Link
             href="/"
-            className="text-sm text-accent hover:underline"
+            className="text-xs text-accent hover:underline"
           >
             {t.result.back}
           </Link>
@@ -194,23 +197,35 @@ function ResultContent() {
           />
         </div>
 
-        <header className="mb-8">
-          <h1 className="font-mono text-lg text-foreground/80 break-all">
+        <header className="mb-3">
+          <h1 className="font-mono text-sm text-foreground/85 break-all">
             {username} / {repo}
           </h1>
           <a
             href={result.repoUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-point hover:underline text-sm"
+            className="text-accent hover:underline text-xs"
           >
             {result.repoUrl}
           </a>
         </header>
 
-        <section className="mb-10">
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative h-32 w-32">
+        <section className="rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 mb-4">
+          <div className="flex flex-wrap items-center gap-3 border-b border-foreground/10 pb-2">
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl font-semibold tabular-nums" style={{ color: gradeColor }}>
+                {result.totalScore}
+              </span>
+              <span className="text-foreground/50 text-xs">/ 100</span>
+            </div>
+            <span
+              className="rounded px-1.5 py-0.5 font-mono text-[11px] font-medium"
+              style={{ backgroundColor: `${gradeColor}18`, color: gradeColor }}
+            >
+              {t.result.grade} {result.grade}
+            </span>
+            <div className="relative h-12 w-12 ml-auto shrink-0">
               <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
                 <path
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
@@ -226,75 +241,57 @@ function ResultContent() {
                   strokeWidth="2"
                   strokeDasharray={`${result.totalScore}, 100`}
                   strokeLinecap="round"
-                  className="transition-[stroke-dasharray] duration-700"
+                  className="transition-[stroke-dasharray] duration-500"
                 />
               </svg>
             </div>
-            <div className="text-center">
-              <span className="text-5xl font-bold" style={{ color: gradeColor }}>
-                {result.totalScore}
-              </span>
-              <span className="text-foreground/70 ml-1">/ 100</span>
-            </div>
-            <span
-              className="rounded px-4 py-1.5 font-mono text-lg font-medium"
-              style={{ backgroundColor: `${gradeColor}20`, color: gradeColor }}
-            >
-              {t.result.grade} {result.grade}
-            </span>
           </div>
-        </section>
-
-        <section className="mb-10 space-y-4">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-foreground/70">
-            {t.result.breakdown}
-          </h2>
-          <div className="space-y-4">
+          <dl className="mt-2 space-y-1.5">
             <div>
-              <div className="mb-1 flex justify-between text-sm text-foreground/80">
-                <span>{t.home.security}</span>
-                <span>{result.security} / 100</span>
+              <div className="mb-0.5 flex justify-between text-[11px]">
+                <dt className="text-foreground/70">{t.home.security}</dt>
+                <dd className="tabular-nums font-medium" style={{ color: scoreToColor(result.security) }}>{result.security} / 100</dd>
               </div>
-              <div className="h-2 w-full rounded-full bg-foreground/10">
+              <div className="h-1 w-full rounded-full bg-foreground/10 overflow-hidden">
                 <div
-                  className="h-2 rounded-full bg-point transition-[width] duration-500"
-                  style={{ width: `${result.security}%` }}
+                  className="h-1 rounded-full transition-[width] duration-300"
+                  style={{ width: `${result.security}%`, backgroundColor: scoreToColor(result.security) }}
                 />
               </div>
             </div>
             <div>
-              <div className="mb-1 flex justify-between text-sm text-foreground/80">
-                <span>{t.home.codeQuality}</span>
-                <span>{result.quality} / 100</span>
+              <div className="mb-0.5 flex justify-between text-[11px]">
+                <dt className="text-foreground/70">{t.home.codeQuality}</dt>
+                <dd className="tabular-nums font-medium" style={{ color: scoreToColor(result.quality) }}>{result.quality} / 100</dd>
               </div>
-              <div className="h-2 w-full rounded-full bg-foreground/10">
+              <div className="h-1 w-full rounded-full bg-foreground/10 overflow-hidden">
                 <div
-                  className="h-2 rounded-full bg-point transition-[width] duration-500"
-                  style={{ width: `${result.quality}%` }}
+                  className="h-1 rounded-full transition-[width] duration-300"
+                  style={{ width: `${result.quality}%`, backgroundColor: scoreToColor(result.quality) }}
                 />
               </div>
             </div>
             <div>
-              <div className="mb-1 flex justify-between text-sm text-foreground/80">
-                <span>{t.home.dependencyRisk}</span>
-                <span>{result.dependencyRisk}</span>
+              <div className="mb-0.5 flex justify-between text-[11px]">
+                <dt className="text-foreground/70">{t.home.dependencyRisk}</dt>
+                <dd className="tabular-nums font-medium" style={{ color: scoreToColor(Number(result.dependencyRisk)) }}>{result.dependencyRisk} / 100</dd>
               </div>
-              <div className="h-2 w-full rounded-full bg-foreground/10">
+              <div className="h-1 w-full rounded-full bg-foreground/10 overflow-hidden">
                 <div
-                  className="h-2 rounded-full bg-point transition-[width] duration-500"
-                  style={{ width: `${result.dependencyRisk}%` }}
+                  className="h-1 rounded-full transition-[width] duration-300"
+                  style={{ width: `${result.dependencyRisk}%`, backgroundColor: scoreToColor(Number(result.dependencyRisk)) }}
                 />
               </div>
             </div>
-          </div>
+          </dl>
         </section>
 
         {result.details && result.details.length > 0 && (
-          <section className="mb-10">
-            <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-foreground/70">
+          <section className="mb-4">
+            <h2 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-foreground/60">
               {t.result.detailsTitle}
             </h2>
-            <div className="space-y-6">
+            <div className="space-y-3">
               {(["security", "quality", "dependency"] as const).map((cat) => {
                 const items = result.details!.filter((d) => d.category === cat);
                 if (items.length === 0) return null;
@@ -305,11 +302,11 @@ function ResultContent() {
                       ? t.home.codeQuality
                       : t.home.dependencyRisk;
                 return (
-                  <div key={cat} className="rounded-2xl border border-foreground/10 bg-foreground/[0.03] p-4 shadow-sm">
-                    <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-foreground/60">
+                  <div key={cat} className="rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3">
+                    <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-foreground/60">
                       {categoryLabel}
                     </h3>
-                    <ul className="space-y-3">
+                    <ul className="space-y-2">
                       {items.map((item) => (
                         <DetailRow
                           key={item.id}
@@ -330,27 +327,27 @@ function ResultContent() {
           </section>
         )}
 
-        <section className="rounded-3xl border border-foreground/10 bg-foreground/[0.03] p-6 shadow-sm">
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-foreground/70">
+        <section className="rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3">
+          <h2 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-foreground/60">
             {t.result.badge}
           </h2>
-          <p className="mb-4 text-sm text-foreground/80 leading-relaxed">
+          <p className="mb-2 text-xs text-foreground/75 leading-relaxed">
             {t.result.badgeReadmeExplain}
           </p>
-          <p className="mb-2 text-xs text-foreground/70">
+          <p className="mb-1.5 text-[11px] text-foreground/60">
             {t.result.preview}
           </p>
-          <div className="mb-4 flex items-center gap-3 rounded-lg bg-background/80 p-4">
+          <div className="mb-2 flex items-center rounded-lg border border-foreground/10 bg-background/80 p-3">
             <img
               src={`/api/badge/${username}/${repo}?score=${result.totalScore}&grade=${encodeURIComponent(result.grade)}`}
               alt={`SafeVibesOnly Score: ${result.totalScore}`}
-              className="h-7"
+              className="h-5"
             />
           </div>
-          <p className="mb-2 text-xs text-foreground/70">
+          <p className="mb-1.5 text-[11px] text-foreground/60">
             {t.result.addToReadme}
           </p>
-          <pre className="mb-4 overflow-x-auto rounded bg-background p-4 text-sm text-foreground/90">
+          <pre className="mb-3 overflow-x-auto rounded-lg bg-background/80 border border-foreground/10 p-3 text-[11px] text-foreground/90">
             {`![SafeVibesOnly Score](${getBadgeBase()}/api/badge/${username}/${repo})`}
           </pre>
           <CopyButton
@@ -387,10 +384,10 @@ function DetailRow({
   const toggleLabel = (t.result as { detailPlainToggle?: string }).detailPlainToggle ?? "In plain language";
 
   return (
-    <li className="rounded-md border border-foreground/10 bg-background/50 p-3">
-      <div className="flex items-center gap-2">
+    <li className="rounded-lg border border-foreground/10 bg-foreground/[0.02] p-2">
+      <div className="flex items-center gap-1.5">
         <span
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px]"
           style={{
             background: isGood ? "#34d39920" : isWarn ? "#fbbf2420" : "#f8717120",
             color: isGood ? "#34d399" : isWarn ? "#fbbf24" : "#f87171",
@@ -400,32 +397,32 @@ function DetailRow({
           {isGood ? "✓" : isWarn ? "!" : "✕"}
         </span>
         <div className="min-w-0 flex-1">
-          <span className="text-sm font-medium text-foreground">{label}</span>
+          <span className="text-xs font-medium text-foreground">{label}</span>
           {item.value != null && (
-            <span className="ml-2 text-xs text-foreground/60">({item.value})</span>
+            <span className="ml-1.5 text-[11px] text-foreground/60">({item.value})</span>
           )}
         </div>
         {scoreText != null && (
-          <span className={`shrink-0 font-mono text-xs tabular-nums ${scoreText.startsWith("-") ? "text-red-400" : "text-point"}`}>
+          <span className={`shrink-0 font-mono text-[11px] tabular-nums ${scoreText.startsWith("-") ? "text-red-400" : "text-point"}`}>
             {scoreText}
           </span>
         )}
         {isGood && scoreText == null && (
-          <span className="text-xs text-foreground/50">{t.result.detailGood}</span>
+          <span className="text-[11px] text-foreground/50">{t.result.detailGood}</span>
         )}
       </div>
       {showTip && (
-        <p className="mt-2 border-t border-foreground/10 pt-2 text-xs text-foreground/70">
+        <p className="mt-1.5 border-t border-foreground/10 pt-1.5 text-[11px] text-foreground/70">
           <span className="font-medium text-foreground/80">{t.result.improveTip}: </span>
           {tip}
         </p>
       )}
       {hasPlain && (
-        <div className="mt-2 border-t border-foreground/10 pt-2">
+        <div className="mt-1.5 border-t border-foreground/10 pt-1.5">
           <button
             type="button"
             onClick={() => setPlainOpen((o) => !o)}
-            className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium text-point hover:underline"
+            className="flex w-full items-center justify-between gap-1.5 text-left text-[11px] font-medium text-point hover:underline"
           >
             <span>{toggleLabel}</span>
             <span className="shrink-0 text-foreground/60" aria-hidden>
@@ -433,7 +430,7 @@ function DetailRow({
             </span>
           </button>
           {plainOpen && (
-            <p className="mt-1.5 rounded bg-foreground/5 px-2.5 py-2 text-xs leading-relaxed text-foreground/85">
+            <p className="mt-1 rounded bg-foreground/5 px-2 py-1.5 text-[11px] leading-relaxed text-foreground/85">
               {plain}
             </p>
           )}
@@ -471,7 +468,7 @@ function ShareToXButton({
     <button
       type="button"
       onClick={handleShare}
-      className="rounded-2xl border border-foreground/20 bg-transparent px-4 py-2 text-sm font-medium text-foreground transition hover:bg-foreground/10 hover:border-foreground/30"
+      className="rounded-lg border border-foreground/15 bg-transparent px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-foreground/10 hover:border-foreground/25"
       aria-label={label}
     >
       {label}
@@ -504,7 +501,7 @@ function CopyButton({
     <button
       type="button"
       onClick={handleCopy}
-      className="rounded-2xl bg-point px-4 py-2 text-sm font-medium text-[#0d1117] transition hover:opacity-90 shadow-md shadow-point/15"
+      className="rounded-lg bg-point px-3 py-1.5 text-xs font-medium text-[#0d1117] transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-point/30 focus:ring-offset-2 focus:ring-offset-background"
     >
       {copied ? copiedLabel : copyLabel}
     </button>

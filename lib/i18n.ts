@@ -113,7 +113,7 @@ export const messages: Record<
 > = {
   en: {
     home: {
-      heroTitle: "Safe Vibes Only.\nCheck Your Vibe Code.",
+      heroTitle: "Check Your Vibe Code.",
       heroSubtitle:
         "Paste your GitHub repository URL and get a security report in seconds.",
       scopeNote: "Scoring is based on JavaScript/Node.js web projects.\nSome items may not apply to mobile apps or other project types.",
@@ -229,7 +229,7 @@ export const messages: Record<
   },
   ko: {
     home: {
-      heroTitle: "Safe Vibes Only.\n바이브 코드를 점검하세요.",
+      heroTitle: "바이브 코드를 점검하세요.",
       heroSubtitle:
         "GitHub 저장소 URL을 붙여넣으면 몇 초 만에 보안 리포트를 받을 수 있습니다.",
       scopeNote: "점수는 JavaScript/Node.js 웹 프로젝트 기준입니다.\n모바일 앱 등 다른 종류의 프로젝트에는 해당하지 않는 항목이 있을 수 있습니다.",
@@ -345,7 +345,7 @@ export const messages: Record<
   },
   ja: {
     home: {
-      heroTitle: "Safe Vibes Only.\nバイブコードをチェック。",
+      heroTitle: "バイブコードをチェック。",
       heroSubtitle:
         "GitHubリポジトリのURLを貼り付けると、数秒でセキュリティレポートを表示します。",
       scopeNote: "スコアはJavaScript/Node.jsのWebプロジェクトを基準としています。\nモバイルアプリなど他種類のプロジェクトには該当しない項目があります。",
