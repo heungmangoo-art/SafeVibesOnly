@@ -1,6 +1,6 @@
 # SafeVibesOnly
 
-![SafeVibesOnly Score](https://safe-vibes-only.vercel.app/api/badge/heungmangoo-art/SafeVibesOnly)
+![SafeVibesOnly Score](https://safe-vibes-only.vercel.app/api/badge/heungmangoo-art/SafeVibesOnly?score=85&grade=A)
 
 GitHub AI 생성 코드(Vibe code)의 보안 및 품질을 검사하고 점수/배지를 발급하는 웹 서비스입니다.
 
