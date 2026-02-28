@@ -1,7 +1,7 @@
 import { parseRepoUrl } from "./repo";
-import type { ScanResult, ScoreDetail } from "./types";
-import { fetchScorecard, scorecardTo100 } from "./scorecard";
-import { getSnykIssueCount, snykIssuesToSecurityPenalty } from "./snyk";
+import type { ScanResult, ScoreDetail, ScoreBreakdownItem } from "./types";
+import { fetchScorecard } from "./scorecard";
+import { getSnykIssueCount } from "./snyk";
 import { fetchSocketScore, socketScoreTo100 } from "./socket";
 
 const GITHUB_API = "https://api.github.com";
@@ -178,34 +178,66 @@ function hasDangerousScripts(scripts: Record<string, string> | undefined): boole
   return dangerous.some((re) => re.test(allScripts));
 }
 
-// Security: 라이선스, 최근 활동, 이슈 트래커
-function scoreSecurity(repo: RepoResponse): number {
-  let s = 50;
-  if (repo.license?.spdx_id && repo.license.spdx_id !== "NOASSERTION") s += 25;
-  const updated = new Date(repo.updated_at).getTime();
-  const daysSinceUpdate = (Date.now() - updated) / (1000 * 60 * 60 * 24);
-  if (daysSinceUpdate < 30) s += 15;
-  else if (daysSinceUpdate < 90) s += 10;
-  else if (daysSinceUpdate < 180) s += 5;
-  if (repo.has_issues) s += 10;
-  return clamp(s);
+const SOURCE_EXT = /\.(js|ts|jsx|tsx|py)$/i;
+const MAX_SOURCE_FILES = 12;
+
+/** Fetch content of source files from root (and optionally src/) to scan for secrets. */
+async function fetchSourceContents(
+  owner: string,
+  repo: string,
+  rootList: DirItem[]
+): Promise<string[]> {
+  const toFetch: string[] = [];
+  for (const item of rootList) {
+    if (item.type !== "file") continue;
+    if (SOURCE_EXT.test(item.name)) toFetch.push(item.name);
+    if (toFetch.length >= MAX_SOURCE_FILES) break;
+  }
+  const srcDir = rootList.find((x) => x.type === "dir" && x.name === "src");
+  if (srcDir && toFetch.length < MAX_SOURCE_FILES) {
+    const srcList = await fetchGitHub<DirItem[]>(`/repos/${owner}/${repo}/contents/src`);
+    if (Array.isArray(srcList)) {
+      for (const item of srcList) {
+        if (item.type !== "file" || !SOURCE_EXT.test(item.name)) continue;
+        toFetch.push(`src/${item.name}`);
+        if (toFetch.length >= MAX_SOURCE_FILES) break;
+      }
+    }
+  }
+  const contents: string[] = [];
+  for (const path of toFetch.slice(0, MAX_SOURCE_FILES)) {
+    const file = await fetchGitHub<ContentResponse>(`/repos/${owner}/${repo}/contents/${path}`);
+    if (!file?.content) continue;
+    try {
+      contents.push(Buffer.from(file.content, "base64").toString("utf-8"));
+    } catch {
+      // skip binary or bad encoding
+    }
+  }
+  return contents;
 }
 
-// Quality: 설명, 스타, 크기, 이슈
-function scoreQuality(repo: RepoResponse): number {
-  let q = 40;
-  if (repo.description && repo.description.length > 10) q += 20;
-  const stars = Math.min(repo.stargazers_count, 1000);
-  q += Math.min(25, Math.floor(stars / 40));
-  if (repo.size > 0 && repo.size < 5000) q += 10;
-  if (repo.has_issues) q += 5;
-  return clamp(q);
+/** Detect console.log with sensitive-looking args (password, token, apiKey, etc.). */
+function hasConsoleLogSecrets(contents: string[]): boolean {
+  const re = /console\.log\s*\([^)]*?(password|token|apiKey|api_key|secret|credential|Authorization|Bearer|apikey)/i;
+  return contents.some((text) => re.test(text));
 }
+
+/** Detect hardcoded secrets: password = "...", apiKey = "...", etc. (string 6+ chars). */
+function hasHardcodedSecrets(contents: string[]): boolean {
+  const re = /(password|apiKey|api_key|secret|token|apikey)\s*[:=]\s*['"][^'"]{6,}['"]/i;
+  return contents.some((text) => re.test(text));
+}
+
+// 품질: 기본 없이 항목별 합 = 100 (27+34+14+7+4+3+4+4+3)
+const QUALITY_MAX = 100;
 
 type PackageInfo = {
   depCount: number;
+  depNames: string[]; // dependency + devDependency 패키지 이름 (npm 조회용, 최대 30개)
   name?: string;
   version?: string;
+  description?: string;
   scripts?: Record<string, string>;
   hasTestScript: boolean;
   hasRepositoryField: boolean;
@@ -217,6 +249,7 @@ async function getPackageInfo(owner: string, repo: string): Promise<PackageInfo>
   );
   const empty: PackageInfo = {
     depCount: -1,
+    depNames: [],
     hasTestScript: false,
     hasRepositoryField: false,
   };
@@ -228,13 +261,18 @@ async function getPackageInfo(owner: string, repo: string): Promise<PackageInfo>
       devDependencies?: Record<string, string>;
       name?: string;
       version?: string;
+      description?: string;
       scripts?: Record<string, string>;
       repository?: string | { url?: string; type?: string };
     };
-    const deps = Object.keys(json.dependencies ?? {}).length;
-    const devDeps = Object.keys(json.devDependencies ?? {}).length;
+    const depKeys = Object.keys(json.dependencies ?? {});
+    const devKeys = Object.keys(json.devDependencies ?? {});
+    const allNames = [...new Set([...depKeys, ...devKeys])].slice(0, 30);
+    const deps = depKeys.length;
+    const devDeps = devKeys.length;
     const name = typeof json.name === "string" ? json.name : undefined;
     const version = typeof json.version === "string" ? json.version : "latest";
+    const description = typeof json.description === "string" ? json.description : undefined;
     const scripts = json.scripts && typeof json.scripts === "object" ? json.scripts : undefined;
     const hasTestScript =
       typeof scripts?.test === "string" && scripts.test.trim().length > 0;
@@ -244,8 +282,10 @@ async function getPackageInfo(owner: string, repo: string): Promise<PackageInfo>
       (typeof repoField === "string" || (typeof repoField === "object" && "url" in repoField));
     return {
       depCount: deps + devDeps,
+      depNames: allNames,
       name,
       version,
+      description,
       scripts,
       hasTestScript,
       hasRepositoryField: !!hasRepositoryField,
@@ -255,15 +295,59 @@ async function getPackageInfo(owner: string, repo: string): Promise<PackageInfo>
   }
 }
 
-// Dependency Risk: 의존성 개수 (적을수록 높은 점수)
-function scoreDependencyRisk(depCount: number): number {
-  if (depCount < 0) return 75;
-  if (depCount === 0) return 95;
-  if (depCount <= 10) return 90;
-  if (depCount <= 25) return 80;
-  if (depCount <= 50) return 70;
-  if (depCount <= 100) return 60;
-  return Math.max(40, 70 - Math.floor(depCount / 20));
+// 의존성 위험: 개수만 점수화 (0~25점 만점). 나머지는 lock/활동/라이선스로 별도
+function scoreDepCountPoints(depCount: number): number {
+  if (depCount < 0) return 25;
+  if (depCount <= 25) return 25;
+  if (depCount <= 60) return 15;
+  if (depCount <= 100) return 10;
+  return Math.max(5, 10 - Math.floor((depCount - 100) / 50));
+}
+
+const NPM_REGISTRY = "https://registry.npmjs.org";
+const MAX_DEPS_LICENSE_CHECK = 20; // npm 조회 수 제한
+const COPYLEFT_PATTERN = /^(GPL|AGPL|LGPL|SSPL)/i;
+
+/** npm 레지스트리에서 패키지의 license 필드 조회 (최신 버전 기준) */
+async function fetchNpmLicense(packageName: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${NPM_REGISTRY}/${encodeURIComponent(packageName)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      license?: string | { type?: string };
+      versions?: Record<string, { license?: string | { type?: string } }>;
+    };
+    if (typeof data.license === "string") return data.license;
+    if (data.license && typeof data.license === "object" && typeof data.license.type === "string")
+      return data.license.type;
+    const versions = data.versions && typeof data.versions === "object" ? Object.keys(data.versions) : [];
+    const latest = versions[versions.length - 1];
+    const vLicense = latest && data.versions?.[latest]?.license;
+    if (typeof vLicense === "string") return vLicense;
+    if (vLicense && typeof vLicense === "object" && typeof (vLicense as { type?: string }).type === "string")
+      return (vLicense as { type: string }).type;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 의존성 중 GPL/AGPL/LGPL 등 코피레프트(라이선스 충돌 위험) 존재 여부 */
+async function checkDependencyLicenseConflicts(
+  depNames: string[]
+): Promise<{ hasConflict: boolean; conflictingPackages: string[] }> {
+  const toCheck = depNames.slice(0, MAX_DEPS_LICENSE_CHECK);
+  const conflictingPackages: string[] = [];
+  await Promise.all(
+    toCheck.map(async (pkg) => {
+      const license = await fetchNpmLicense(pkg);
+      if (license && COPYLEFT_PATTERN.test(license.trim())) conflictingPackages.push(pkg);
+    })
+  );
+  return { hasConflict: conflictingPackages.length > 0, conflictingPackages };
 }
 
 function formatDaysAgo(updatedAt: string): string {
@@ -283,6 +367,8 @@ type SecurityChecks = {
   hasLockFile: boolean;
   dangerousScripts: boolean;
   readmeHasHttp: boolean;
+  consoleLogSecrets: boolean;
+  hardcodedSecrets: boolean;
 };
 
 function buildDetails(
@@ -293,32 +379,15 @@ function buildDetails(
   socketScore: number | null,
   securityChecks: SecurityChecks,
   rootList: DirItem[],
-  hasCi: boolean
+  hasCi: boolean,
+  licenseConflict: { hasConflict: boolean; conflictingPackages: string[] }
 ): ScoreDetail[] {
   const details: ScoreDetail[] = [];
   const daysSinceUpdate = Math.floor(
     (Date.now() - new Date(repo.updated_at).getTime()) / (1000 * 60 * 60 * 24)
   );
 
-  details.push({
-    id: "license",
-    category: "security",
-    status: repo.license?.spdx_id && repo.license.spdx_id !== "NOASSERTION" ? "good" : "bad",
-    value: repo.license?.spdx_id ?? undefined,
-  });
-  details.push({
-    id: "recent_activity",
-    category: "security",
-    status: daysSinceUpdate < 90 ? "good" : daysSinceUpdate < 180 ? "warn" : "bad",
-    value: formatDaysAgo(repo.updated_at),
-  });
-  details.push({
-    id: "issues_enabled",
-    category: "security",
-    status: repo.has_issues ? "good" : "warn",
-    value: repo.has_issues ? "Yes" : "No",
-  });
-
+  // 🔴 보안 (8항목)
   details.push({
     id: "exposed_env",
     category: "security",
@@ -341,18 +410,30 @@ function buildDetails(
     value: securityChecks.readmeSensitive ? "Suspicious pattern found" : "OK",
   });
   details.push({
+    id: "console_log_secrets",
+    category: "security",
+    status: !securityChecks.consoleLogSecrets ? "good" : "bad",
+    value: securityChecks.consoleLogSecrets ? "Suspicious pattern" : "OK",
+  });
+  details.push({
+    id: "hardcoded_secrets",
+    category: "security",
+    status: !securityChecks.hardcodedSecrets ? "good" : "bad",
+    value: securityChecks.hardcodedSecrets ? "Found in code" : "OK",
+  });
+  details.push({
     id: "security_md",
     category: "security",
     status: securityChecks.hasSecurityMd ? "good" : "warn",
     value: securityChecks.hasSecurityMd ? "Present" : "Missing",
   });
+  details.push({
+    id: "readme_http",
+    category: "security",
+    status: !securityChecks.readmeHasHttp ? "good" : "warn",
+    value: securityChecks.readmeHasHttp ? "Uses http://" : "OK",
+  });
   if (pkg.depCount >= 0) {
-    details.push({
-      id: "lock_file",
-      category: "security",
-      status: securityChecks.hasLockFile ? "good" : "warn",
-      value: securityChecks.hasLockFile ? "Present" : "Missing",
-    });
     details.push({
       id: "dangerous_scripts",
       category: "security",
@@ -360,12 +441,6 @@ function buildDetails(
       value: securityChecks.dangerousScripts ? "Risky pattern found" : "OK",
     });
   }
-  details.push({
-    id: "readme_http",
-    category: "security",
-    status: !securityChecks.readmeHasHttp ? "good" : "warn",
-    value: securityChecks.readmeHasHttp ? "Uses http://" : "OK",
-  });
 
   if (scorecardScore != null) {
     details.push({
@@ -384,11 +459,13 @@ function buildDetails(
     });
   }
 
+  // 🟡 코드 품질 (8항목)
+  const effectiveDesc = repo.description || pkg.description;
   details.push({
     id: "description",
     category: "quality",
-    status: repo.description && repo.description.length > 10 ? "good" : "warn",
-    value: repo.description ? `${repo.description.length} chars` : "None",
+    status: effectiveDesc && effectiveDesc.length > 10 ? "good" : "warn",
+    value: effectiveDesc ? `${effectiveDesc.length} chars` : "None",
   });
   details.push({
     id: "readme_present",
@@ -401,12 +478,6 @@ function buildDetails(
     category: "quality",
     status: hasContributing(rootList) ? "good" : "warn",
     value: hasContributing(rootList) ? "Present" : "Missing",
-  });
-  details.push({
-    id: "open_issues",
-    category: "quality",
-    status: repo.open_issues_count <= 20 ? "good" : repo.open_issues_count <= 50 ? "warn" : "bad",
-    value: `${repo.open_issues_count}`,
   });
   details.push({
     id: "ci_workflow",
@@ -429,10 +500,10 @@ function buildDetails(
     });
   }
   details.push({
-    id: "stars",
+    id: "open_issues",
     category: "quality",
-    status: repo.stargazers_count >= 10 ? "good" : repo.stargazers_count >= 1 ? "warn" : "good",
-    value: `${repo.stargazers_count}`,
+    status: repo.open_issues_count <= 20 ? "good" : repo.open_issues_count <= 50 ? "warn" : "bad",
+    value: `${repo.open_issues_count}`,
   });
   details.push({
     id: "repo_size",
@@ -441,12 +512,19 @@ function buildDetails(
     value: repo.size > 0 ? `${repo.size} KB` : "—",
   });
 
+  // 🟢 의존성 위험 (4항목 + socket)
   if (pkg.depCount >= 0) {
     details.push({
       id: "dep_count",
       category: "dependency",
       status: pkg.depCount <= 25 ? "good" : pkg.depCount <= 60 ? "warn" : "bad",
       value: `${pkg.depCount} package(s)`,
+    });
+    details.push({
+      id: "lock_file",
+      category: "dependency",
+      status: securityChecks.hasLockFile ? "good" : "warn",
+      value: securityChecks.hasLockFile ? "Present" : "Missing",
     });
   } else {
     details.push({
@@ -456,6 +534,20 @@ function buildDetails(
       value: "No package.json",
     });
   }
+  details.push({
+    id: "recent_activity",
+    category: "dependency",
+    status: daysSinceUpdate < 90 ? "good" : daysSinceUpdate < 180 ? "warn" : "bad",
+    value: formatDaysAgo(repo.updated_at),
+  });
+  details.push({
+    id: "license",
+    category: "dependency",
+    status: licenseConflict.hasConflict ? "bad" : "good",
+    value: licenseConflict.hasConflict
+      ? `GPL/AGPL 등: ${licenseConflict.conflictingPackages.join(", ")}`
+      : (repo.license?.spdx_id ?? "No conflict detected"),
+  });
   if (socketScore != null) {
     const pct = Math.round(socketScore * 100);
     details.push({
@@ -513,6 +605,15 @@ export async function scanRepo(url: string): Promise<ScanResult> {
       ? await fetchSocketScore(packageInfo.name, packageInfo.version)
       : null;
 
+  const licenseConflict =
+    packageInfo.depNames.length > 0
+      ? await checkDependencyLicenseConflicts(packageInfo.depNames)
+      : { hasConflict: false, conflictingPackages: [] as string[] };
+
+  const sourceContents = await fetchSourceContents(owner, repo, rootList);
+  const consoleLogSecrets = hasConsoleLogSecrets(sourceContents);
+  const hardcodedSecrets = hasHardcodedSecrets(sourceContents);
+
   const exposedEnv = checkExposedEnvFromList(rootList);
   const securityChecks: SecurityChecks = {
     exposedEnvFiles: exposedEnv,
@@ -522,45 +623,74 @@ export async function scanRepo(url: string): Promise<ScanResult> {
     hasLockFile: hasLockFile(rootList),
     dangerousScripts: hasDangerousScripts(packageInfo.scripts),
     readmeHasHttp: readmeChecks.hasHttp,
+    consoleLogSecrets,
+    hardcodedSecrets,
   };
 
-  let securityBase = scoreSecurity(repoData);
-  if (exposedEnv.length > 0) securityBase = Math.max(0, securityBase - 40);
-  if (readmeChecks.sensitive) securityBase = Math.max(0, securityBase - 30);
-  if (!gitignoreEnv && packageInfo.depCount >= 0) securityBase = Math.max(0, securityBase - 10);
-  if (securityChecks.hasSecurityMd) securityBase = Math.min(100, securityBase + 5);
-  if (securityChecks.hasLockFile && packageInfo.depCount >= 0) securityBase = Math.min(100, securityBase + 5);
-  if (securityChecks.dangerousScripts) securityBase = Math.max(0, securityBase - 25);
-  if (securityChecks.readmeHasHttp) securityBase = Math.max(0, securityBase - 5);
+  // 🔴 보안: 8항목, 각 12.5점, 합 100
+  const SEC_ITEM = 12.5;
+  const securityBreakdown: ScoreBreakdownItem[] = [];
+  const secExposed = exposedEnv.length === 0 ? SEC_ITEM : 0;
+  securityBreakdown.push({ item: "exposedEnv", points: secExposed, max: SEC_ITEM });
+  const secGitignore = securityChecks.gitignoreHasEnv ? SEC_ITEM : 0;
+  securityBreakdown.push({ item: "gitignoreEnv", points: secGitignore, max: SEC_ITEM });
+  const secReadme = !readmeChecks.sensitive ? SEC_ITEM : 0;
+  securityBreakdown.push({ item: "sensitiveReadme", points: secReadme, max: SEC_ITEM });
+  const secConsole = !securityChecks.consoleLogSecrets ? SEC_ITEM : 0;
+  securityBreakdown.push({ item: "consoleLogSecrets", points: secConsole, max: SEC_ITEM });
+  const secHardcoded = !securityChecks.hardcodedSecrets ? SEC_ITEM : 0;
+  securityBreakdown.push({ item: "hardcodedSecrets", points: secHardcoded, max: SEC_ITEM });
+  const secMd = securityChecks.hasSecurityMd ? SEC_ITEM : 0;
+  securityBreakdown.push({ item: "securityMd", points: secMd, max: SEC_ITEM });
+  const secHttp = !securityChecks.readmeHasHttp ? SEC_ITEM : 0;
+  securityBreakdown.push({ item: "readmeHttp", points: secHttp, max: SEC_ITEM });
+  const secScripts = (packageInfo.depCount < 0 || !securityChecks.dangerousScripts) ? SEC_ITEM : 0;
+  securityBreakdown.push({ item: "dangerousScripts", points: secScripts, max: SEC_ITEM });
+  const security = clamp(Math.round(securityBreakdown.reduce((a, x) => a + x.points, 0)));
 
-  let quality = scoreQuality(repoData);
-  if (hasReadme(rootList)) quality = Math.min(100, quality + 3);
-  if (hasContributing(rootList)) quality = Math.min(100, quality + 2);
-  if (hasCi) quality = Math.min(100, quality + 3);
-  if (packageInfo.depCount >= 0) {
-    if (packageInfo.hasTestScript) quality = Math.min(100, quality + 3);
-    if (packageInfo.hasRepositoryField) quality = Math.min(100, quality + 2);
-  }
-  quality = clamp(quality);
-  const depRiskBase = clamp(scoreDependencyRisk(packageInfo.depCount));
+  // 🟡 코드 품질: 8항목, 합 100 (설명12, readme12, contributing12, ci12, test12, repo12, open_issues14, size14)
+  const qualityBreakdown: ScoreBreakdownItem[] = [];
+  const qDescMax = 12;
+  const qDesc = (repoData.description && repoData.description.length > 10) || (packageInfo.description && packageInfo.description.length > 10) ? qDescMax : 0;
+  qualityBreakdown.push({ item: "description", points: qDesc, max: qDescMax });
+  const readmeMax = 12;
+  qualityBreakdown.push({ item: "readme", points: hasReadme(rootList) ? readmeMax : 0, max: readmeMax });
+  const contribMax = 12;
+  qualityBreakdown.push({ item: "contributing", points: hasContributing(rootList) ? contribMax : 0, max: contribMax });
+  const ciMax = 12;
+  qualityBreakdown.push({ item: "ci", points: hasCi ? ciMax : 0, max: ciMax });
+  const testMax = 12;
+  qualityBreakdown.push({ item: "testScript", points: packageInfo.hasTestScript ? testMax : 0, max: testMax });
+  const repoMax = 12;
+  qualityBreakdown.push({ item: "packageRepo", points: packageInfo.hasRepositoryField ? repoMax : 0, max: repoMax });
+  const openIssuesMax = 14;
+  const qOpen = repoData.open_issues_count <= 20 ? openIssuesMax : repoData.open_issues_count <= 50 ? 7 : 0;
+  qualityBreakdown.push({ item: "openIssues", points: qOpen, max: openIssuesMax });
+  const sizeMax = 14;
+  const qSize = repoData.size > 0 && repoData.size < 5000 ? sizeMax : repoData.size >= 5000 && repoData.size < 10000 ? 7 : 0;
+  qualityBreakdown.push({ item: "size", points: qSize, max: sizeMax });
+  const quality = clamp(qualityBreakdown.reduce((a, x) => a + x.points, 0));
 
-  let security = clamp(securityBase);
-  if (scorecardResult?.score != null) {
-    const sc100 = scorecardTo100(scorecardResult.score);
-    security = Math.round((security + sc100) / 2);
-  }
-  if (snykCount != null) {
-    security = clamp(security - snykIssuesToSecurityPenalty(snykCount));
-  }
-  security = clamp(security);
-
-  let dependencyRisk = depRiskBase;
+  // 🟢 의존성 위험: 4항목 각 25점, 합 100. (개수, 락파일, 최근업데이트, 라이선스)
+  const updated = new Date(repoData.updated_at).getTime();
+  const daysSince = (Date.now() - updated) / (1000 * 60 * 60 * 24);
+  const depCountPts = scoreDepCountPoints(packageInfo.depCount);
+  const lockPts = packageInfo.depCount >= 0 && securityChecks.hasLockFile ? 25 : packageInfo.depCount < 0 ? 25 : 0;
+  const activityPts = daysSince < 30 ? 25 : daysSince < 90 ? 15 : daysSince < 180 ? 10 : 0;
+  const licensePts = licenseConflict.hasConflict ? 0 : 25;
+  const dependencyBreakdown: ScoreBreakdownItem[] = [];
+  dependencyBreakdown.push({ item: "depCount", points: depCountPts, max: 25 });
+  dependencyBreakdown.push({ item: "lockFile", points: packageInfo.depCount >= 0 ? (securityChecks.hasLockFile ? 25 : 0) : 25, max: 25 });
+  dependencyBreakdown.push({ item: "recentActivity", points: activityPts, max: 25 });
+  dependencyBreakdown.push({ item: "license", points: licensePts, max: 25 });
+  let dependencyRisk = clamp(depCountPts + lockPts + activityPts + licensePts);
   if (socketScore != null) {
     const socket100 = socketScoreTo100(socketScore);
-    dependencyRisk = clamp(Math.round((depRiskBase + socket100) / 2));
+    dependencyRisk = clamp(Math.round((dependencyRisk + socket100) / 2));
   }
 
-  const totalScore = Math.round((security + quality + dependencyRisk) / 3);
+  // 총점: 보안 40% + 코드품질 35% + 의존성 25%
+  const totalScore = Math.round(security * 0.40 + quality * 0.35 + dependencyRisk * 0.25);
   const grade = getGrade(totalScore);
 
   const details = buildDetails(
@@ -571,7 +701,8 @@ export async function scanRepo(url: string): Promise<ScanResult> {
     socketScore,
     securityChecks,
     rootList,
-    hasCi
+    hasCi,
+    licenseConflict
   );
 
   return {
@@ -582,5 +713,8 @@ export async function scanRepo(url: string): Promise<ScanResult> {
     totalScore,
     grade,
     details,
+    qualityBreakdown,
+    securityBreakdown,
+    dependencyBreakdown,
   };
 }

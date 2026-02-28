@@ -117,11 +117,10 @@ npm run dev
 
 1. [Vercel](https://vercel.com)에 로그인 후, 이 저장소를 GitHub에 푸시하고 Import
 2. Project Settings → Environment Variables에서 다음 추가:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - (선택) `NEXT_PUBLIC_APP_URL`: 배포된 사이트 URL (예: `https://safevibesonly.vercel.app`) — 설정 시 배지 마크다운에 이 주소가 사용됨
 3. Deploy 후 배포 URL 확인 (예: `https://safevibesonly.vercel.app`)
-4. 배지 URL은 기본 예시가 `https://SafeVibesOnly.dev`로 되어 있으므로, 실제로 사용할 때는 **본인 도메인**으로 교체하세요.  
-   예: `https://your-app.vercel.app/api/badge/{username}/{reponame}`
+4. **배지 URL**: `https://SafeVibesOnly.dev`는 실제 도메인이 아닌 예시입니다. 결과 페이지에서 "복사"한 배지 마크다운은 **현재 접속한 주소**(예: `https://safevibesonly.vercel.app`)를 자동으로 넣습니다. 서버에서 주소가 필요하면 환경변수 `NEXT_PUBLIC_APP_URL`에 배포 URL을 설정하세요.
 
 ## 스크립트
 

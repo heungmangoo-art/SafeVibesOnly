@@ -8,18 +8,70 @@ import { parseRepoUrl, isValidRepoUrl } from "@/lib/repo";
 import type { ScanResult, ScoreDetail } from "@/lib/types";
 import { useLocale } from "../LocaleProvider";
 
-const BADGE_BASE = "https://SafeVibesOnly.dev";
+function getBadgeBase(): string {
+  if (typeof window !== "undefined") return window.location.origin;
+  return process.env.NEXT_PUBLIC_APP_URL || "https://SafeVibesOnly.dev";
+}
+
+/** detail id → breakdown item key (for score display next to each row) */
+const DETAIL_TO_BREAKDOWN: Record<string, Record<string, string>> = {
+  quality: {
+    description: "description",
+    readme_present: "readme",
+    contributing: "contributing",
+    ci_workflow: "ci",
+    test_script: "testScript",
+    package_repository: "packageRepo",
+    open_issues: "openIssues",
+    repo_size: "size",
+  },
+  security: {
+    exposed_env: "exposedEnv",
+    gitignore_env: "gitignoreEnv",
+    sensitive_readme: "sensitiveReadme",
+    console_log_secrets: "consoleLogSecrets",
+    hardcoded_secrets: "hardcodedSecrets",
+    security_md: "securityMd",
+    readme_http: "readmeHttp",
+    dangerous_scripts: "dangerousScripts",
+  },
+  dependency: {
+    dep_count: "depCount",
+    lock_file: "lockFile",
+    recent_activity: "recentActivity",
+    license: "license",
+  },
+};
+
+function getScoreForDetail(
+  category: "security" | "quality" | "dependency",
+  detailId: string,
+  breakdowns: {
+    quality?: { item: string; points: number; max: number }[];
+    security?: { item: string; points: number; max: number }[];
+    dependency?: { item: string; points: number; max: number }[];
+  }
+): string | null {
+  const key = DETAIL_TO_BREAKDOWN[category]?.[detailId];
+  if (!key) return null;
+  const arr = breakdowns[category];
+  if (!arr?.length) return null;
+  const entry = arr.find((x) => x.item === key);
+  if (!entry) return null;
+  if (entry.max > 0) return `${entry.points} / ${entry.max}`;
+  return String(entry.points);
+}
 
 function getGradeColor(grade: string): string {
-  if (grade === "S" || grade === "A") return "#00ff88";
-  if (grade === "B") return "#ffcc00";
-  return "#ff4444";
+  if (grade === "S" || grade === "A") return "#34d399";
+  if (grade === "B") return "#fbbf24";
+  return "#f87171";
 }
 
 function ResultLoadingFallback() {
   const { t } = useLocale();
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-background bg-subtle text-foreground">
       <div className="h-10 w-10 animate-spin rounded-full border-2 border-foreground/20 border-t-point" />
       <p className="mt-4 text-foreground/80">{t.result.loading}</p>
     </div>
@@ -85,26 +137,30 @@ function ResultContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-6">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-foreground/20 border-t-point" />
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-background bg-subtle text-foreground">
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-foreground/20 border-t-point" />
         <p className="mt-4 text-foreground/80">{t.result.scanning}</p>
       </div>
+    </div>
     );
   }
 
   if (!result) {
     if (errorMessage) {
       return (
-        <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-6">
-          <div className="max-w-md text-center">
-            <p className="text-foreground font-mono text-lg mb-2">{t.result.scanErrorTitle}</p>
-            <p className="text-foreground/80 text-sm mb-6 whitespace-pre-wrap">{errorMessage}</p>
-            <Link
-              href="/"
-              className="text-point hover:underline text-sm"
-            >
-              {t.result.back}
-            </Link>
+        <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-background bg-subtle text-foreground">
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="max-w-md text-center">
+              <p className="text-foreground font-mono text-lg mb-2">{t.result.scanErrorTitle}</p>
+              <p className="text-foreground/80 text-sm mb-6 whitespace-pre-wrap">{errorMessage}</p>
+              <Link
+                href="/"
+                className="text-accent hover:underline text-sm"
+              >
+                {t.result.back}
+              </Link>
+            </div>
           </div>
         </div>
       );
@@ -120,17 +176,23 @@ function ResultContent() {
   const gradeColor = getGradeColor(result.grade);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8 md:py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr,minmax(320px,400px)] gap-8 lg:gap-12">
-          {/* Left: technical score & details */}
-          <div className="min-w-0">
-        <Link
-          href="/"
-          className="text-sm text-point hover:underline mb-6 inline-block"
-        >
-          {t.result.back}
-        </Link>
+    <div className="min-h-screen bg-background bg-subtle text-foreground">
+      <main className="mx-auto max-w-6xl w-full px-4 sm:px-6 py-8 md:py-12 overflow-auto">
+        <div className="min-w-0 max-w-4xl">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <Link
+            href="/"
+            className="text-sm text-accent hover:underline"
+          >
+            {t.result.back}
+          </Link>
+          <ShareToXButton
+            score={result.totalScore}
+            grade={result.grade}
+            repoName={`${username}/${repo}`}
+            label={t.result.shareToX}
+          />
+        </div>
 
         <header className="mb-8">
           <h1 className="font-mono text-lg text-foreground/80 break-all">
@@ -191,7 +253,7 @@ function ResultContent() {
             <div>
               <div className="mb-1 flex justify-between text-sm text-foreground/80">
                 <span>{t.home.security}</span>
-                <span>{result.security}</span>
+                <span>{result.security} / 100</span>
               </div>
               <div className="h-2 w-full rounded-full bg-foreground/10">
                 <div
@@ -203,7 +265,7 @@ function ResultContent() {
             <div>
               <div className="mb-1 flex justify-between text-sm text-foreground/80">
                 <span>{t.home.codeQuality}</span>
-                <span>{result.quality}</span>
+                <span>{result.quality} / 100</span>
               </div>
               <div className="h-2 w-full rounded-full bg-foreground/10">
                 <div
@@ -243,13 +305,22 @@ function ResultContent() {
                       ? t.home.codeQuality
                       : t.home.dependencyRisk;
                 return (
-                  <div key={cat} className="rounded-lg border border-foreground/10 bg-foreground/5 p-4">
+                  <div key={cat} className="rounded-2xl border border-foreground/10 bg-foreground/[0.03] p-4 shadow-sm">
                     <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-foreground/60">
                       {categoryLabel}
                     </h3>
                     <ul className="space-y-3">
                       {items.map((item) => (
-                        <DetailRow key={item.id} item={item} t={t} />
+                        <DetailRow
+                          key={item.id}
+                          item={item}
+                          t={t}
+                          scoreText={getScoreForDetail(cat, item.id, {
+                            quality: result.qualityBreakdown ?? undefined,
+                            security: result.securityBreakdown ?? undefined,
+                            dependency: result.dependencyBreakdown ?? undefined,
+                          })}
+                        />
                       ))}
                     </ul>
                   </div>
@@ -259,21 +330,13 @@ function ResultContent() {
           </section>
         )}
 
-        <section className="mb-10 rounded-lg border border-foreground/10 bg-foreground/5 p-4">
-          <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-foreground/60">
-            {t.result.scoreCriteriaTitle}
-          </h3>
-          <ul className="space-y-1 text-xs text-foreground/70">
-            <li>• {t.result.scoreCriteriaSecurity}</li>
-            <li>• {t.result.scoreCriteriaQuality}</li>
-            <li>• {t.result.scoreCriteriaDeps}</li>
-          </ul>
-        </section>
-
-        <section className="rounded-xl border border-foreground/10 bg-foreground/5 p-6">
+        <section className="rounded-3xl border border-foreground/10 bg-foreground/[0.03] p-6 shadow-sm">
           <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-foreground/70">
             {t.result.badge}
           </h2>
+          <p className="mb-4 text-sm text-foreground/80 leading-relaxed">
+            {t.result.badgeReadmeExplain}
+          </p>
           <p className="mb-2 text-xs text-foreground/70">
             {t.result.preview}
           </p>
@@ -288,112 +351,16 @@ function ResultContent() {
             {t.result.addToReadme}
           </p>
           <pre className="mb-4 overflow-x-auto rounded bg-background p-4 text-sm text-foreground/90">
-            {`![SafeVibesOnly Score](${BADGE_BASE}/api/badge/${username}/${repo})`}
+            {`![SafeVibesOnly Score](${getBadgeBase()}/api/badge/${username}/${repo})`}
           </pre>
           <CopyButton
-            text={`![SafeVibesOnly Score](${BADGE_BASE}/api/badge/${username}/${repo})`}
+            text={`![SafeVibesOnly Score](${getBadgeBase()}/api/badge/${username}/${repo})`}
             copyLabel={t.result.copy}
             copiedLabel={t.result.copied}
           />
         </section>
-          </div>
-
-          {/* Right: plain-language panel for non-developers */}
-          <aside className="lg:sticky lg:top-6 lg:self-start">
-            <PlainPanel t={t} />
-          </aside>
         </div>
       </main>
-    </div>
-  );
-}
-
-function PlainPanel({ t }: { t: ReturnType<typeof useLocale>["t"] }) {
-  const plain = t.result as unknown as {
-    plainTitle: string;
-    plainIntro: string;
-    plainSecurityWhat: string;
-    plainSecurityExample: string;
-    plainQualityWhat: string;
-    plainQualityExample: string;
-    plainDependencyWhat: string;
-    plainDependencyExample: string;
-    plainTermsTitle: string;
-    plainTermLabel: { env: string; secrets: string; readme: string; lockFile: string; ci: string; license: string };
-    plainTerms: {
-      env: string;
-      secrets: string;
-      readme: string;
-      lockFile: string;
-      ci: string;
-      license: string;
-    };
-  };
-  return (
-    <div className="rounded-xl border border-foreground/15 bg-foreground/[0.03] p-5 md:p-6">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-point">
-        {plain.plainTitle}
-      </h2>
-      <p className="mb-5 text-sm text-foreground/85 leading-relaxed">
-        {plain.plainIntro}
-      </p>
-
-      <div className="space-y-5">
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-foreground/90">
-            {plain.plainSecurityWhat}
-          </p>
-          <p className="text-xs text-foreground/70 leading-relaxed">
-            {plain.plainSecurityExample}
-          </p>
-        </div>
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-foreground/90">
-            {plain.plainQualityWhat}
-          </p>
-          <p className="text-xs text-foreground/70 leading-relaxed">
-            {plain.plainQualityExample}
-          </p>
-        </div>
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-foreground/90">
-            {plain.plainDependencyWhat}
-          </p>
-          <p className="text-xs text-foreground/70 leading-relaxed">
-            {plain.plainDependencyExample}
-          </p>
-        </div>
-      </div>
-
-      <h3 className="mt-6 mb-2 text-xs font-medium uppercase tracking-wider text-foreground/70">
-        {plain.plainTermsTitle}
-      </h3>
-      <dl className="space-y-2.5 text-xs text-foreground/75">
-        <div>
-          <dt className="font-medium text-foreground/90">· {plain.plainTermLabel.env}</dt>
-          <dd className="mt-0.5 pl-0">{plain.plainTerms.env}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-foreground/90">· {plain.plainTermLabel.secrets}</dt>
-          <dd className="mt-0.5 pl-0">{plain.plainTerms.secrets}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-foreground/90">· {plain.plainTermLabel.readme}</dt>
-          <dd className="mt-0.5 pl-0">{plain.plainTerms.readme}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-foreground/90">· {plain.plainTermLabel.lockFile}</dt>
-          <dd className="mt-0.5 pl-0">{plain.plainTerms.lockFile}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-foreground/90">· {plain.plainTermLabel.ci}</dt>
-          <dd className="mt-0.5 pl-0">{plain.plainTerms.ci}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-foreground/90">· {plain.plainTermLabel.license}</dt>
-          <dd className="mt-0.5 pl-0">{plain.plainTerms.license}</dd>
-        </div>
-      </dl>
     </div>
   );
 }
@@ -401,9 +368,11 @@ function PlainPanel({ t }: { t: ReturnType<typeof useLocale>["t"] }) {
 function DetailRow({
   item,
   t,
+  scoreText,
 }: {
   item: ScoreDetail;
   t: ReturnType<typeof useLocale>["t"];
+  scoreText?: string | null;
 }) {
   const [plainOpen, setPlainOpen] = useState(false);
   const meta = (t.result.details as Record<string, { label: string; tip: string; plain?: string }>)[item.id];
@@ -423,8 +392,8 @@ function DetailRow({
         <span
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm"
           style={{
-            background: isGood ? "#00ff8820" : isWarn ? "#ffcc0020" : "#ff444420",
-            color: isGood ? "#00ff88" : isWarn ? "#ffcc00" : "#ff4444",
+            background: isGood ? "#34d39920" : isWarn ? "#fbbf2420" : "#f8717120",
+            color: isGood ? "#34d399" : isWarn ? "#fbbf24" : "#f87171",
           }}
           aria-hidden
         >
@@ -436,7 +405,12 @@ function DetailRow({
             <span className="ml-2 text-xs text-foreground/60">({item.value})</span>
           )}
         </div>
-        {isGood && (
+        {scoreText != null && (
+          <span className={`shrink-0 font-mono text-xs tabular-nums ${scoreText.startsWith("-") ? "text-red-400" : "text-point"}`}>
+            {scoreText}
+          </span>
+        )}
+        {isGood && scoreText == null && (
           <span className="text-xs text-foreground/50">{t.result.detailGood}</span>
         )}
       </div>
@@ -469,6 +443,42 @@ function DetailRow({
   );
 }
 
+function ShareToXButton({
+  score,
+  grade,
+  repoName,
+  label,
+}: {
+  score: number;
+  grade: string;
+  repoName: string;
+  label: string;
+}) {
+  function handleShare() {
+    const text = `My SafeVibesOnly security score: ${score} (${grade}) for ${repoName} 🛡️`;
+    const url =
+      typeof window !== "undefined"
+        ? window.location.href
+        : `${getBadgeBase()}/result`;
+    const intentUrl = `https://twitter.com/intent/tweet?${new URLSearchParams({
+      text,
+      url,
+    }).toString()}`;
+    window.open(intentUrl, "_blank", "noopener,noreferrer,width=550,height=420");
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleShare}
+      className="rounded-2xl border border-foreground/20 bg-transparent px-4 py-2 text-sm font-medium text-foreground transition hover:bg-foreground/10 hover:border-foreground/30"
+      aria-label={label}
+    >
+      {label}
+    </button>
+  );
+}
+
 function CopyButton({
   text,
   copyLabel,
@@ -494,7 +504,7 @@ function CopyButton({
     <button
       type="button"
       onClick={handleCopy}
-      className="rounded-lg bg-point px-4 py-2 text-sm font-medium text-background transition hover:opacity-90"
+      className="rounded-2xl bg-point px-4 py-2 text-sm font-medium text-[#0d1117] transition hover:opacity-90 shadow-md shadow-point/15"
     >
       {copied ? copiedLabel : copyLabel}
     </button>
